@@ -243,7 +243,7 @@ def parse_all_kyoku(root, target_kyoku=None, target_honba=None):
     
 if __name__ == "__main__":
     
-    zip_path = "/Users/sin/Downloads/mjlog_pf4-20_n30.zip"
+    zip_path = "/Volumes/Media_SSD/Downloads/Dataset/mjlog_pf4-20_n30.zip"
     
     if len(sys.argv) > 1:
         zip_path = sys.argv[1]
