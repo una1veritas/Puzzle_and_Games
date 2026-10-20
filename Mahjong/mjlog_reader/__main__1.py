@@ -1,165 +1,321 @@
 import gzip
 import io
 import re
-import urllib.request
+import sys
 import xml.etree.ElementTree as ET
+import zipfile
 import zlib
 
-SUITS = ["m", "p", "s"]
-HONORS = ["東", "南", "西", "北", "白", "發", "中"]
+# タグの対応関係
+TSUMO_TAGS = {"T": 0, "U": 1, "V": 2, "W": 3}
+DAHAI_TAGS = {"D": 0, "E": 1, "F": 2, "G": 3}
 
 
-def parse_tile(tile_id):
-    tid = int(tile_id)
-    raw = tid // 4
-    if raw < 27:
-        suit = SUITS[raw // 9]
-        num = (raw % 9) + 1
-        return f"0{suit}" if tid in (16, 52, 88) else f"{num}{suit}"
-    return HONORS[raw - 27]
+def mjlog_zip_reader(zip_path: str, pattern=None):
+    pattern = pattern if pattern is not None else ".*"
+    with zipfile.ZipFile(zip_path, "r") as z:
+        # ディレクトリを除外し、実際のファイル（.mjlog）のみ抽出
+        file_list = [
+            f
+            for f in z.namelist()
+            if not f.endswith("/")
+            and (f.endswith(".mjlog") or f.endswith(".xml"))
+            and re.search(pattern, f)
+        ]
+        print(f"有効な牌譜ファイル数: {len(file_list)} 件")
 
-
-def main():
-    headers = {"User-Agent": "Mozilla/5.0"}
-
-    # --- ステップ 1: list.cgi からログファイル一覧を取得 ---
-    print("1. 天鳳サーバーの list.cgi からログファイル一覧を取得中...")
-    cgi_url = "https://tenhou.net/sc/raw/list.cgi"
-
-    try:
-        req = urllib.request.Request(cgi_url, headers=headers)
-        with urllib.request.urlopen(req) as resp:
-            cgi_body = resp.read().decode("utf-8", errors="ignore")
-
-        entries = re.findall(r"file:'(sca[^']+\.log\.gz)',size:(\d+)", cgi_body)
-        valid_files = [e[0] for e in entries if int(e[1]) > 30000]
-
-        if not valid_files:
-            print("エラー: 有効な日別ログファイルが見つかりませんでした。")
-            return
-
-        # 直近から順にファイルを選択
-        target_files = list(reversed(valid_files))
-        print(f" -> 候補ファイル数: {len(target_files)} 件")
-
-    except Exception as e:
-        print(f"list.cgi の取得に失敗しました: {e}")
-        return
-
-    # --- ステップ 2: ログをダウンロードして対局IDを抽出（ヒットするまで試行） ---
-    # --- ステップ 2: ログをダウンロードして解凍＆対局ID抽出 ---
-    selected_log_id = None
-
-    for f_name in target_files:
-        print(f"\n2. [{f_name}] をダウンロードして解凍中...")
-        file_url = f"https://tenhou.net/sc/raw/dat/{f_name}"
-
-        try:
-            req_file = urllib.request.Request(file_url, headers=headers)
-            with urllib.request.urlopen(req_file) as resp:
-                compressed_bytes = resp.read()
-
-            # 1. 確実に GZIP 解凍を行う
-            try:
-                raw_bytes = gzip.decompress(compressed_bytes)
-            except Exception as ge:
-                print(f"  GZIP解凍エラー: {ge}")
-                continue
-
-            # 2. テキストへデコード (utf-8 -> euc-jp -> shift_jis の順で試行)
-            raw_text = None
-            for enc in ["utf-8", "euc-jp", "shift_jis"]:
-                try:
-                    raw_text = raw_bytes.decode(enc)
-                    break
-                except UnicodeDecodeError:
-                    continue
-
-            if not raw_text:
-                raw_text = raw_bytes.decode("utf-8", errors="ignore")
-
-            # 生データの先頭2行を確認（デバッグ用）
-            lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
-            print("--- [解凍成功！ 生データ構造 (先頭2行)] ---")
-            for line in lines[:2]:
-                print(f"  {line}")
-            print("-------------------------------------------")
-
-            # 3. 対局IDの抽出
-            # 天鳳ログ内の "L" 付近または URL 内の ID (20XXXXXXXXgm-....) を抽出
-            all_ids = re.findall(
-                r"20\d{8}gm-[0-9a-zA-F]{4}-[0-9a-zA-F]{4}-[0-9a-zA-F]{8}",
-                raw_text,
+        if not file_list:
+            raise FileNotFoundError(
+                f"条件に一致する牌譜ファイルが見つかりません: {zip_path}"
             )
 
-            # 万が一ハイフン区切り数が異なる場合のフォールバックパターン
-            if not all_ids:
-                all_ids = re.findall(r"20\d{8}gm-[0-9a-zA-F\-]+", raw_text)
+        # 最初のファイルを取り出してパース
+        sample_filename = file_list[0]
+        print(f"処理対象: {sample_filename}")
 
-            print(f" -> 抽出成功数: {len(all_ids)} 件")
-
-            if all_ids:
-                selected_log_id = all_ids[0]
-                print(f" -> 動作テストに使用する確定ID: {selected_log_id}")
-                break
-
-        except Exception as e:
-            print(f"  {f_name} 処理中のエラー: {e}")
-            continue
-
-    if not selected_log_id:
-        print("エラー: いずれのファイルからも対局IDを取得できませんでした。")
-        return
-
-    # --- ステップ 3: 該当対局の .mjlog を取得して解凍 ---
-    print(f"\n3. 対局データ (.mjlog) を取得中... (ID: {selected_log_id})")
-    mjlog_url = f"https://tenhou.net/0/log/?{selected_log_id}"
-
-    try:
-        req_mjlog = urllib.request.Request(mjlog_url, headers=headers)
-        with urllib.request.urlopen(req_mjlog) as resp:
-            compressed_xml = resp.read()
+        compressed_bytes = z.read(sample_filename)
 
         try:
-            xml_str = zlib.decompress(compressed_xml, -zlib.MAX_WBITS).decode(
+            xml_str = zlib.decompress(compressed_bytes, -zlib.MAX_WBITS).decode(
                 "utf-8", errors="ignore"
             )
         except Exception:
-            xml_str = gzip.decompress(compressed_xml).decode(
+            xml_str = gzip.decompress(compressed_bytes).decode(
                 "utf-8", errors="ignore"
             )
 
         root = ET.fromstring(xml_str)
-        print(" -> .mjlog の取得・XMLパースに成功しました！")
+        print("パース成功！")
+    return sample_filename, root
 
-    except Exception as e:
-        print(f".mjlog の取得・パースに失敗しました: {e}")
-        return
 
-    # --- ステップ 4: 東1局のデータ（配牌・ドラ）を表示 ---
-    print("\n==================================================")
-    print("【動作確認成功】 東1局 配牌・ドラ表示データ")
-    print("==================================================")
+def parse_tile(tile_id_input):
+    """牌ID(0~135)を表記文字列(0m~9m, 0p~9p, 0s~9s, 東~中)に変換する（赤ドラ対応）"""
+    tile_id = int(tile_id_input)
+
+    # 赤ドラの判定 (16:赤5m, 52:赤5p, 88:赤5s)
+    if tile_id == 16:
+        return "0m"
+    elif tile_id == 52:
+        return "0p"
+    elif tile_id == 88:
+        return "0s"
+
+    num = tile_id // 4
+    if num < 9:
+        return f"{num + 1}m"
+    elif num < 18:
+        return f"{num - 8}p"
+    elif num < 27:
+        return f"{num - 17}s"
+    else:
+        suits = ["東", "南", "西", "北", "白", "發", "中"]
+        return suits[num - 27]
+
+
+def sort_tiles(tile_list):
+    """牌IDリストを昇順（理牌）にソート"""
+    return sorted(tile_list, key=lambda x: int(x))
+
+
+def decode_n_tag(m_str):
+    """<N m="..."> のビット演算デコード処理"""
+    m = int(m_str)
+
+    # 1. チー
+    if m & 0x0004:
+        # m & 0x0003 は「3枚の中でどの牌を拾ったか」のインデックス (0:最小, 1:中央, 2:最大)
+        eaten_idx = m & 0x0003
+
+        pattern = (m >> 3) & 0x003F
+        base_num = pattern // 3
+        base_num = (base_num // 7) * 9 + (base_num % 7)
+
+        t0 = pattern % 3
+        t1 = (m >> 9) & 0x0003
+        t2 = (m >> 11) & 0x0003
+
+        tiles = [
+            (base_num + 0) * 4 + t0,
+            (base_num + 1) * 4 + t1,
+            (base_num + 2) * 4 + t2,
+        ]
+
+        # eaten_idx が 0, 1, 2 の範囲に収まるよう安全策を適用
+        eaten_idx = min(max(0, eaten_idx), 2)
+
+        called_tile = tiles[eaten_idx]
+        hand_tiles = [t for i, t in enumerate(tiles) if i != eaten_idx]
+
+        return {
+            "type": "CHII",
+            "from_who_rel": 3,  # チーは必ず上家(相対位置3)から
+            "called_tile": called_tile,
+            "hand_tiles": hand_tiles,
+            "all_tiles": tiles,
+        }
+
+    # 2. ポン
+    elif m & 0x0008:
+        from_who_rel = m & 0x0003
+        unused = (m >> 5) & 0x0003
+        pattern = (m >> 9) & 0x007F
+        base_tile = pattern // 3
+
+        t_indices = [i for i in range(4) if i != unused]
+        called_idx = (m >> 3) & 0x0003
+        hand_indices = [i for i in t_indices if i != called_idx]
+
+        called_tile = base_tile * 4 + called_idx
+        hand_tiles = [base_tile * 4 + i for i in hand_indices]
+
+        return {
+            "type": "PON",
+            "from_who_rel": from_who_rel,
+            "called_tile": called_tile,
+            "hand_tiles": hand_tiles,
+            "all_tiles": [called_tile] + hand_tiles,
+        }
+
+    # 3. 加槓 (カカン)
+    elif m & 0x0010:
+        from_who_rel = m & 0x0003
+        called_idx = (m >> 3) & 0x0003
+        pattern = (m >> 9) & 0x007F
+        base_tile = pattern // 3
+
+        added_tile = base_tile * 4 + called_idx
+
+        return {
+            "type": "KAKAN",
+            "from_who_rel": from_who_rel,
+            "called_tile": added_tile,
+            "hand_tiles": [added_tile],
+            "all_tiles": [base_tile * 4 + i for i in range(4)],
+        }
+
+    # 4. 暗槓 または 大明槓
+    else:
+        from_who_rel = m & 0x0003
+        pattern = (m >> 8) & 0x00FF
+        base_tile = pattern // 4
+        all_tiles = [base_tile * 4 + i for i in range(4)]
+
+        if from_who_rel == 0:
+            return {
+                "type": "ANKAN",
+                "from_who_rel": 0,
+                "called_tile": None,
+                "hand_tiles": all_tiles,
+                "all_tiles": all_tiles,
+            }
+        else:
+            called_idx = (m >> 3) & 0x0003
+            called_tile = base_tile * 4 + called_idx
+            hand_tiles = [t for t in all_tiles if t != called_tile]
+            return {
+                "type": "MINKAN",
+                "from_who_rel": from_who_rel,
+                "called_tile": called_tile,
+                "hand_tiles": hand_tiles,
+                "all_tiles": all_tiles,
+            }
+
+
+def print_table_state(hands, melds, rivers, action_msg=""):
+    """現在の全員の手牌、副露、捨て牌を出力"""
+    print(f"\n--- {action_msg} ---")
+    for p in range(4):
+        hand_str = " ".join([parse_tile(t) for t in hands[p]])
+
+        meld_list = []
+        for m in melds[p]:
+            m_tiles = " ".join([parse_tile(t) for t in m["all_tiles"]])
+            meld_list.append(f"[{m['type']}:{m_tiles}]")
+        meld_str = " ".join(meld_list) if meld_list else "なし"
+
+        river_str = " ".join([parse_tile(t) for t in rivers[p]])
+
+        print(f"P{p} | 手牌 [{len(hands[p]):2d}枚]: {hand_str}")
+        print(f"     | 副露        : {meld_str}")
+        print(f"     | 捨て牌      : {river_str}")
+
+
+def run_kyoku_simulation(root, target_kyoku=0, target_honba=0):
+    """指定した局・本場のシミュレーションを実行"""
+    in_target_kyoku = False
+
+    hands = {p: [] for p in range(4)}
+    melds = {p: [] for p in range(4)}
+    rivers = {p: [] for p in range(4)}
 
     for elem in root:
-        if elem.tag == "INIT":
-            attr = elem.attrib
-            seed = attr["seed"].split(",")
+        tag = elem.tag
 
+        # === 局の開始 ===
+        if tag == "INIT":
+            seed = elem.attrib["seed"].split(",")
             kyoku_num = int(seed[0])
-            dora_tile = parse_tile(seed[5])
+            honba_num = int(seed[1])
 
-            print(
-                f"局: 東{kyoku_num + 1}局 {seed[1]}本場 | ドラ表示牌: [{dora_tile}]"
+            if kyoku_num == target_kyoku and honba_num == target_honba:
+                in_target_kyoku = True
+                bakaze = "東" if kyoku_num < 4 else "南"
+                kyoku_in_ba = (kyoku_num % 4) + 1
+                print(
+                    f"\n==================== 開始: {bakaze}{kyoku_in_ba}局 {honba_num}本場 ===================="
+                )
+
+                hands = {p: [] for p in range(4)}
+                melds = {p: [] for p in range(4)}
+                rivers = {p: [] for p in range(4)}
+
+                for p in range(4):
+                    hai_str = elem.attrib.get(f"hai{p}", "")
+                    if hai_str:
+                        hands[p] = sort_tiles(hai_str.split(","))
+
+                print_table_state(hands, melds, rivers, action_msg="配牌完了")
+            elif in_target_kyoku:
+                break
+            continue
+
+        if not in_target_kyoku:
+            continue
+
+        # === ツモ ===
+        if len(tag) >= 2 and tag[0] in TSUMO_TAGS and tag[1:].isdigit():
+            player = TSUMO_TAGS[tag[0]]
+            tile = tag[1:]
+            hands[player].append(tile)
+
+            msg = f"P{player} ツモ: [{parse_tile(tile)}]"
+            print_table_state(hands, melds, rivers, action_msg=msg)
+
+        # === 打牌 ===
+        elif len(tag) >= 2 and tag[0] in DAHAI_TAGS and tag[1:].isdigit():
+            player = DAHAI_TAGS[tag[0]]
+            tile = tag[1:]
+
+            if tile in hands[player]:
+                hands[player].remove(tile)
+            rivers[player].append(tile)
+            hands[player] = sort_tiles(hands[player])
+
+            msg = f"P{player} 打牌: {parse_tile(tile)}"
+            print_table_state(hands, melds, rivers, action_msg=msg)
+
+        # === 副露（鳴き） ===
+        elif tag == "N":
+            who = int(elem.attrib["who"])
+            m_val = elem.attrib["m"]
+            decoded = decode_n_tag(m_val)
+
+            for h_tile in decoded["hand_tiles"]:
+                h_tile_str = str(h_tile)
+                if h_tile_str in hands[who]:
+                    hands[who].remove(h_tile_str)
+
+            if decoded["type"] == "KAKAN":
+                base_tile_num = decoded["all_tiles"][0] // 4
+                for m in melds[who]:
+                    if m["all_tiles"][0] // 4 == base_tile_num:
+                        m["type"] = "KAKAN"
+                        m["all_tiles"] = decoded["all_tiles"]
+                        break
+            else:
+                melds[who].append(decoded)
+
+            hands[who] = sort_tiles(hands[who])
+
+            from_who = (
+                (who + decoded["from_who_rel"]) % 4
+                if decoded["from_who_rel"] != 0
+                else who
+            )
+            target_info = (
+                f" (P{from_who}から)" if decoded["type"] != "ANKAN" else ""
             )
 
-            for p in range(4):
-                tile_ids = attr[f"hai{p}"].split(",")
-                tiles = [parse_tile(tid) for tid in tile_ids]
-                print(f" プレイヤー {p}: {' '.join(tiles)}")
+            msg = f"★ P{who} 副露 [{decoded['type']}]{target_info}"
+            print_table_state(hands, melds, rivers, action_msg=msg)
 
+        # === 局の終了 ===
+        elif tag in ("AGARI", "RYUUKYOKU"):
+            print(f"\n=== 局終了 ({tag}) ===")
             break
 
 
 if __name__ == "__main__":
-    main()
+    if sys.platform == "win32":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+    zip_path = "/Users/sin/Downloads/mjlog_pf4-20_n30.zip"
+
+    if len(sys.argv) > 1:
+        zip_path = sys.argv[1]
+
+    filename, xmlroot = mjlog_zip_reader(zip_path)
+
+    # 東1局0本場のシミュレーションを実行
+    run_kyoku_simulation(xmlroot, target_kyoku=0, target_honba=0)

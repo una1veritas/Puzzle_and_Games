@@ -240,10 +240,205 @@ def parse_all_kyoku(root, target_kyoku=None, target_honba=None):
             # 特定の1局だけを検索していた場合はここで終了してOK
             if target_kyoku is not None and target_honba is not None:
                 break
+def decode_n_tag(m_str):
+    """<N m="..."> のビット演算デコード処理"""
+    m = int(m_str)
+
+    # 1. チー
+    if m & 0x0004:
+        from_who_rel = m & 0x0003  # 0:最小牌, 1:中央牌, 2:最大牌
+        pattern = (m >> 3) & 0x003F
+        base_num = pattern // 3
+        base_num = (base_num // 7) * 9 + (base_num % 7)
+
+        t0 = pattern % 3
+        t1 = (m >> 9) & 0x0003
+        t2 = (m >> 11) & 0x0003
+
+        tiles = [
+            (base_num + 0) * 4 + t0,
+            (base_num + 1) * 4 + t1,
+            (base_num + 2) * 4 + t2,
+        ]
+        called_tile = tiles[from_who_rel]
+        hand_tiles = [t for i, t in enumerate(tiles) if i != from_who_rel]
+
+        return {
+            "type": "CHII",
+            "from_who_rel": 3,  # チーは上家から
+            "called_tile": called_tile,
+            "hand_tiles": hand_tiles,
+            "all_tiles": tiles,
+        }
+
+    # 2. ポン
+    elif m & 0x0008:
+        from_who_rel = m & 0x0003
+        unused = (m >> 5) & 0x0003
+        pattern = (m >> 9) & 0x007F
+        base_tile = pattern // 3
+
+        t_indices = [i for i in range(4) if i != unused]
+        called_idx = (m >> 3) & 0x0003
+        hand_indices = [i for i in t_indices if i != called_idx]
+
+        called_tile = base_tile * 4 + called_idx
+        hand_tiles = [base_tile * 4 + i for i in hand_indices]
+
+        return {
+            "type": "PON",
+            "from_who_rel": from_who_rel,
+            "called_tile": called_tile,
+            "hand_tiles": hand_tiles,
+            "all_tiles": [called_tile] + hand_tiles,
+        }
+
+    # 3. 加槓 (カカン)
+    elif m & 0x0010:
+        from_who_rel = m & 0x0003
+        called_idx = (m >> 3) & 0x0003
+        pattern = (m >> 9) & 0x007F
+        base_tile = pattern // 3
+
+        added_tile = base_tile * 4 + called_idx
+
+        return {
+            "type": "KAKAN",
+            "from_who_rel": from_who_rel,
+            "called_tile": added_tile,
+            "hand_tiles": [added_tile],
+            "all_tiles": [base_tile * 4 + i for i in range(4)],
+        }
+
+    # 4. 暗槓 または 大明槓
+    else:
+        from_who_rel = m & 0x0003
+        pattern = (m >> 8) & 0x00FF
+        base_tile = pattern // 4
+        all_tiles = [base_tile * 4 + i for i in range(4)]
+
+        if from_who_rel == 0:
+            return {
+                "type": "ANKAN",
+                "from_who_rel": 0,
+                "called_tile": None,
+                "hand_tiles": all_tiles,
+                "all_tiles": all_tiles,
+            }
+        else:
+            called_idx = (m >> 3) & 0x0003
+            called_tile = base_tile * 4 + called_idx
+            hand_tiles = [t for t in all_tiles if t != called_tile]
+            return {
+                "type": "MINKAN",
+                "from_who_rel": from_who_rel,
+                "called_tile": called_tile,
+                "hand_tiles": hand_tiles,
+                "all_tiles": all_tiles,
+            }
+
+def run_kyoku_simulation(root, target_kyoku=0, target_honba=0):
+    """指定した局・本場のシミュレーションを実行"""
+    in_target_kyoku = False
+
+    hands = {p: [] for p in range(4)}
+    melds = {p: [] for p in range(4)}
+    rivers = {p: [] for p in range(4)}
+
+    for elem in root:
+        tag = elem.tag
+
+        # === 局の開始 ===
+        if tag == "INIT":
+            seed = elem.attrib["seed"].split(",")
+            kyoku_num = int(seed[0])
+            honba_num = int(seed[1])
+
+            if kyoku_num == target_kyoku and honba_num == target_honba:
+                in_target_kyoku = True
+                print(f"\n==================== 開始: 東{kyoku_num + 1}局 {honba_num}本場 ====================")
+
+                hands = {p: [] for p in range(4)}
+                melds = {p: [] for p in range(4)}
+                rivers = {p: [] for p in range(4)}
+
+                for p in range(4):
+                    hai_str = elem.attrib.get(f"hai{p}", "")
+                    if hai_str:
+                        hands[p] = sort_tiles(hai_str.split(","))
+
+                print_table_state(hands, melds, rivers, action_msg="配牌完了")
+            elif in_target_kyoku:
+                break
+            continue
+
+        if not in_target_kyoku:
+            continue
+
+        # === ツモ ===
+        if len(tag) >= 2 and tag[0] in TSUMO_TAGS and tag[1:].isdigit():
+            player = TSUMO_TAGS[tag[0]]
+            tile = tag[1:]
+            hands[player].append(tile)
+
+            msg = f"P{player} ツモ: [{parse_tile(tile)}]"
+            print_table_state(hands, melds, rivers, action_msg=msg)
+
+        # === 打牌 ===
+        elif len(tag) >= 2 and tag[0] in DAHAI_TAGS and tag[1:].isdigit():
+            player = DAHAI_TAGS[tag[0]]
+            tile = tag[1:]
+
+            if tile in hands[player]:
+                hands[player].remove(tile)
+            rivers[player].append(tile)
+            hands[player] = sort_tiles(hands[player])
+
+            msg = f"P{player} 打牌: {parse_tile(tile)}"
+            print_table_state(hands, melds, rivers, action_msg=msg)
+
+        # === 副露（鳴き: ポン・チー・カン） ===
+        elif tag == "N":
+            who = int(elem.attrib["who"])
+            m_val = elem.attrib["m"]
+            decoded = decode_n_tag(m_val)
+
+            # 1. 手牌から鳴きに使用した持牌を取り除く
+            for h_tile in decoded["hand_tiles"]:
+                # h_tile は整数IDなので文字列比較用に str 化
+                h_tile_str = str(h_tile)
+                if h_tile_str in hands[who]:
+                    hands[who].remove(h_tile_str)
+
+            # 2. 加槓の場合、既存のポン面子を槓子に更新。それ以外は新規追加
+            if decoded["type"] == "KAKAN":
+                # 加槓されたベース牌を特定して更新
+                base_tile_num = decoded["all_tiles"][0] // 4
+                for m in melds[who]:
+                    if m["all_tiles"][0] // 4 == base_tile_num:
+                        m["type"] = "KAKAN"
+                        m["all_tiles"] = decoded["all_tiles"]
+                        break
+            else:
+                melds[who].append(decoded)
+
+            hands[who] = sort_tiles(hands[who])
+
+            # 誰から鳴いたかを計算 (絶対プレイヤーID)
+            from_who = (who + decoded["from_who_rel"]) % 4 if decoded["from_who_rel"] != 0 else who
+            target_info = f" (P{from_who}から)" if decoded["type"] != "ANKAN" else ""
+
+            msg = f"★ P{who} 副露 [{decoded['type']}]{target_info}"
+            print_table_state(hands, melds, rivers, action_msg=msg)
+
+        # === 局の終了 ===
+        elif tag in ("AGARI", "RYUUKYOKU"):
+            print(f"\n=== 局終了 ({tag}) ===")
+            break
     
 if __name__ == "__main__":
     
-    zip_path = "/Volumes/Media_SSD/Downloads/Dataset/mjlog_pf4-20_n30.zip"
+    zip_path = "/Users/sin/Downloads/mjlog_pf4-20_n30.zip"
     
     if len(sys.argv) > 1:
         zip_path = sys.argv[1]
