@@ -209,6 +209,9 @@ def run_kyoku_simulation(root, target_kyoku=0, target_honba=0):
     melds = {p: [] for p in range(4)}
     rivers = {p: [] for p in range(4)}
 
+    wall_count = 70  # 残りツモ枚数 #ねんのため
+    tsumo_count = 0  # 累計ツモ回数 #ねんのため
+
     for elem in root:
         tag = elem.tag
 
@@ -234,8 +237,14 @@ def run_kyoku_simulation(root, target_kyoku=0, target_honba=0):
                     hai_str = elem.attrib.get(f"hai{p}", "")
                     if hai_str:
                         hands[p] = sort_tiles(hai_str.split(","))
-
+                
+                # INIT タグで初期化
+                # 四人麻雀（136枚）: 配牌52枚（13枚×4人）と王牌14枚を除くと、ツモ山は70枚
+                wall_count = 70  # 残りツモ枚数
+                tsumo_count = 0  # 累計ツモ回数
+                
                 print_table_state(hands, melds, rivers, action_msg="配牌完了")
+                
             elif in_target_kyoku:
                 break
             continue
@@ -247,9 +256,13 @@ def run_kyoku_simulation(root, target_kyoku=0, target_honba=0):
         if len(tag) >= 2 and tag[0] in TSUMO_TAGS and tag[1:].isdigit():
             player = TSUMO_TAGS[tag[0]]
             tile = tag[1:]
-            hands[player].append(tile)
+            # TSUMO タグを検出するたび
+            wall_count -= 1
+            tsumo_count += 1
 
-            msg = f"P{player} ツモ: [{parse_tile(tile)}]"
+            hands[player].append(tile)
+            
+            msg = f"P{player} ツモ: [{parse_tile(tile)}] 残り {wall_count}枚, 累計ツモ {tsumo_count}回"
             print_table_state(hands, melds, rivers, action_msg=msg)
 
         # === 打牌 ===
