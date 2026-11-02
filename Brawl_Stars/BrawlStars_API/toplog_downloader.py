@@ -4,6 +4,8 @@ import json
 import urllib.parse
 import aiohttp
 
+import sys
+
 # --- 設定項目 ---
 # Brawl Stars APIのエンドポイントURL, 自分で登録し取得したた API に変更すること
 API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiIsImtpZCI6IjI4YTMxOGY3LTAwMDAtYTFlYi03ZmExLTJjNzQzM2M2Y2NhNSJ9.eyJpc3MiOiJzdXBlcmNlbGwiLCJhdWQiOiJzdXBlcmNlbGw6Z2FtZWFwaSIsImp0aSI6IjE5ZWNlOGQxLTg1NmEtNDMyMy05ZmM0LWU3ZDFlNmZjNjlhYSIsImlhdCI6MTc5MzM2ODk1Mywic3ViIjoiZGV2ZWxvcGVyL2M3YzNlOWEwLTY1MzQtNDgxZS04OTgzLWNmN2NkM2VkMjM0YyIsInNjb3BlcyI6WyJicmF3bHN0YXJzIl0sImxpbWl0cyI6W3sidGllciI6ImRldmVsb3Blci9zaWx2ZXIiLCJ0eXBlIjoidGhyb3R0bGluZyJ9LHsiY2lkcnMiOlsiMTgwLjE2LjMxLjMiXSwidHlwZSI6ImNsaWVudCJ9XX0.tRfGum3vMmxcQS1P8Vp0QWYtQGWWVKq8q3XL_9Kz92tj7rxPiYFNzcnCcr9qDIYdd38fsJ7J8pOWHo_NqYLn4g"
@@ -12,7 +14,7 @@ BASE_URL = "https://api.brawlstars.com/v1"
 CONCURRENCY_LIMIT = 5               # 同時リクエスト数制限（API負荷軽減のため）
 LIMIT_RANKINGS = 50                 # 起点として取得するトッププレイヤー数
 MAX_RECORDS = 5000                  # 収集する最大試合数
-OUTPUT_FILE = "battlelogs.jsonl"    # 保存先ファイル名
+OUTPUT_FILE = "battlelogs.json"    # 保存先ファイル名
 
 
 async def get_top_player_tags(session: aiohttp.ClientSession, api_key: str, limit: int = 50) -> list[str]:
@@ -145,7 +147,11 @@ async def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        try:
+            LIMIT_RANKINGS = int(sys.argv[1])  # コマンドライン引数でLIMIT_RANKINGSを上書き可能
+        except ValueError:
+            print("python top_log_downloader.py [LIMIT_RANKINGS]") 
     # 実行に必要なライブラリの確認用メッセージ
     # インストールが必要な場合: pip install aiohttp
-    LIMIT_RANKINGS = 50
     asyncio.run(main())

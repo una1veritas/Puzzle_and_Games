@@ -1,9 +1,16 @@
 #.json の内容をを duckdb にいれ、SQL で取り出すサンプル
 import duckdb
+import sys
 
 JSONL_FILE = "battlelogs.jsonl"
 DB_FILE = "brawl_data.duckdb"
+GAME_MODES = ["gemGrab", "showdown", "brawlBall", "bounty", "heist", "siege", "hotZone", "knockout"]
+GAMO_MODE_CHOICE = GAME_MODES[2]  # 例: brawlBall を選択
 
+if len(sys.argv) > 1:
+    JSONL_FILE = sys.argv[1]  # コマンドライン引数でJSONL_FILEを上書き可能
+if len(sys.argv) > 2:
+    GAMO_MODE_CHOICE = sys.argv[2]  # コマンドライン引数でゲームモードを指定可能
 # DuckDBに接続（ファイル名を指定して永続化）
 con = duckdb.connect(DB_FILE)
 
@@ -47,7 +54,7 @@ print(stats_df.to_string(index=False))
 
 # 3. 最初の 3v3 対戦情報の詳細出力
 print("\n=================== 最初の3v3試合データ ===================")
-first_match = con.execute("""
+matches = con.execute(f"""
     SELECT 
         battleTime,
         mode,
@@ -56,17 +63,17 @@ first_match = con.execute("""
         duration_sec,
         teams
     FROM battles_3v3
-    WHERE mode='brawlBall'
-    LIMIT 1
-""").fetchone()
+    WHERE mode='{GAMO_MODE_CHOICE}'
+    LIMIT 2
+""")
 
-if first_match:
-    b_time, mode, map_name, result, duration, teams = first_match
-    print(f"対戦日時  : {b_time}")
-    print(f"モード    : {mode}")
-    print(f"マップ    : {map_name}")
-    print(f"勝敗結果  : {result}")
-    print(f"試合時間  : {duration}秒\n")
+for a_match in matches.fetchall():
+    # b_time, mode, map_name, result, duration, teams = a_match
+    # print(f"対戦日時  : {b_time}")
+    # print(f"モード    : {mode}")
+    # print(f"マップ    : {map_name}")
+    # print(f"勝敗結果  : {result}")
+    # print(f"試合時間  : {duration}秒\n")
     
     print("【チーム構成】")
     for idx, team in enumerate(teams, 1):
@@ -78,6 +85,7 @@ if first_match:
             brawler_id = player.get("brawler", {}).get("id", "N/A")
             brawler_trophies = player.get("brawler", {}).get("trophies", "0")
             print(f"    - プレイヤー: {tag:12s} | ブロラー: {brawler_name:12s} (ID: {brawler_id}) PLV: {str(brawler_plevel):>2s} TRP: {brawler_trophies:5} ")
+    print("\n\n")
 
 con.close()
 print(f"\nDBファイルへの保存が完了しました（保存先: {DB_FILE}）。")
