@@ -55,6 +55,7 @@ first_match = con.execute("""
         duration_sec,
         teams
     FROM battles_3v3
+    WHERE mode='brawlBall'
     LIMIT 1
 """).fetchone()
 
@@ -68,12 +69,14 @@ if first_match:
     
     print("【チーム構成】")
     for idx, team in enumerate(teams, 1):
-        print(f"  ■ チーム {idx}:")
+        print(f"  ■ チーム {idx} {'(target)' if idx == 1 else ''}:")
         for player in team:
             tag = player.get("tag", "N/A")
             brawler_name = player.get("brawler", {}).get("name", "UNKNOWN")
+            brawler_plevel = player.get("brawler", {}).get("power", "??")
             brawler_id = player.get("brawler", {}).get("id", "N/A")
-            print(f"    - プレイヤー: {tag:10s} | ブロラー: {brawler_name:15s} (ID: {brawler_id})")
+            brawler_trophies = player.get("brawler", {}).get("trophies", "0")
+            print(f"    - プレイヤー: {tag:12s} | ブロラー: {brawler_name:12s} (ID: {brawler_id}) PLV: {str(brawler_plevel):>2s} TRP: {brawler_trophies:5} ")
 
 con.close()
 print(f"\nDBファイルへの保存が完了しました（保存先: {DB_FILE}）。")
