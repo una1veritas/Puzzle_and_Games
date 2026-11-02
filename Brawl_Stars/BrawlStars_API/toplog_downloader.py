@@ -1,9 +1,11 @@
+#brawler stars API によるグローバルランキング上位プレイヤーの対戦ログ取得
 import asyncio
 import json
 import urllib.parse
 import aiohttp
 
 # --- 設定項目 ---
+# Brawl Stars APIのエンドポイントURL, 自分で登録し取得したた API に変更すること
 API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiIsImtpZCI6IjI4YTMxOGY3LTAwMDAtYTFlYi03ZmExLTJjNzQzM2M2Y2NhNSJ9.eyJpc3MiOiJzdXBlcmNlbGwiLCJhdWQiOiJzdXBlcmNlbGw6Z2FtZWFwaSIsImp0aSI6IjE5ZWNlOGQxLTg1NmEtNDMyMy05ZmM0LWU3ZDFlNmZjNjlhYSIsImlhdCI6MTc5MzM2ODk1Mywic3ViIjoiZGV2ZWxvcGVyL2M3YzNlOWEwLTY1MzQtNDgxZS04OTgzLWNmN2NkM2VkMjM0YyIsInNjb3BlcyI6WyJicmF3bHN0YXJzIl0sImxpbWl0cyI6W3sidGllciI6ImRldmVsb3Blci9zaWx2ZXIiLCJ0eXBlIjoidGhyb3R0bGluZyJ9LHsiY2lkcnMiOlsiMTgwLjE2LjMxLjMiXSwidHlwZSI6ImNsaWVudCJ9XX0.tRfGum3vMmxcQS1P8Vp0QWYtQGWWVKq8q3XL_9Kz92tj7rxPiYFNzcnCcr9qDIYdd38fsJ7J8pOWHo_NqYLn4g"
 # Developer Portalで発行したAPIキーを設定
 BASE_URL = "https://api.brawlstars.com/v1"
@@ -145,5 +147,5 @@ async def main():
 if __name__ == "__main__":
     # 実行に必要なライブラリの確認用メッセージ
     # インストールが必要な場合: pip install aiohttp
-    LIMIT_RANKINGS = 100
+    LIMIT_RANKINGS = 50
     asyncio.run(main())

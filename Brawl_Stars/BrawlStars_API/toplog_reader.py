@@ -1,3 +1,4 @@
+#.json の内容をを duckdb にいれ、SQL で取り出すサンプル
 import duckdb
 
 JSONL_FILE = "battlelogs.jsonl"
