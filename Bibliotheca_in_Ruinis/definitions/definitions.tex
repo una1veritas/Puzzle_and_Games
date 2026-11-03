@@ -1,0 +1,86 @@
+\documentclass{article}
+\usepackage{amsmath, amssymb}
+\usepackage{autobreak}
+
+\title{Library of Ruina：\\1対1ダイスバトルシステムの定式化モデル}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{状態空間の定義}
+キャラクター $C$ の状態を 4 つの組として定義する。
+\[
+State(C) = (HP, ST, R_{hp}, R_{st})
+\]
+\begin{itemize}
+    \item $HP \in \mathbb{Z}_{\ge 0}$ : 体力
+    \item $ST \in \mathbb{Z}_{\ge 0}$ : 混乱抵抗値（Stagger）
+    \item $R_{hp}, R_{st} \in \{0.5, 1.0, 1.5, 2.0\}^5$ : 5つの攻撃属性に対する傷害倍率ベクトル（耐性）
+\end{itemize}
+
+\section{ダイスの定義}
+1つのダイス $d$ は、属性・型・値域の3つ組で表される。
+\[
+d = (attr, type, [v_{min}, v_{max}])
+\]
+\begin{itemize}
+    \item $attr \in \{\text{斬撃}, \text{貫通}, \text{打撃}, \text{その他1}, \text{その他2}\}$ （5つの属性のいずれか）
+    \item $type \in \{\text{攻撃}, \text{防御}, \text{回避}\}$
+    \item $[v_{min}, v_{max}]$ : 出現し得る値の閉区間 ($v_{min}, v_{max} \in \mathbb{Z}^+$)
+\end{itemize}
+
+ダイスロールによる実現値 $X(d)$ は、閉区間からの等確率一様離散確率変数とする。
+\[
+X(d) \sim U(\{v_{min}, v_{min}+1, \dots, v_{max}\})
+\]
+
+\section{ページの定義}
+ページ（バトルカード） $P$ は、$k$ 個のダイスの有限列として定義される。
+\[
+P = (d_1, d_2, \dots, d_k)
+\]
+
+\section{1対1マッチの実行と状態遷移ロジック}
+攻撃側キャラクター $A$（ページ $P_A$）と防御側キャラクター $B$（ページ $P_B$）のマッチを考える。
+ダイス列の長さを $k_A, k_B$ とし、$N = \max(k_A, k_B)$ とする。
+
+ステップ $i = 1, 2, \dots, N$ において、以下のように順次評価する。
+
+\subsection{ケース(i)：双方にダイスが存在する場合 ($i \le k_A$ かつ $i \le k_B$)}
+互いにダイスをロールし、$x_A = X(d_{A, i})$, $x_B = X(d_{B, i})$ を得る。\\
+（※以下は「攻撃 vs 攻撃」の最小モデル）
+
+\begin{itemize}
+    \item \textbf{$x_A > x_B$ の場合（$A$ の勝利）：}
+    $B$ が受けるダメージ $D_{hp}, D_{st}$ を以下のように算出し、$B$ の状態を更新する。
+    \[
+    D_{hp} = x_A \times R_{hp, B}(attr_{A, i})
+    \]
+    \[
+    D_{st} = x_A \times R_{st, B}(attr_{A, i})
+    \]
+    \[
+    HP_B \leftarrow \max(0, HP_B - D_{hp}), \quad ST_B \leftarrow \max(0, ST_B - D_{st})
+    \]
+
+    \item \textbf{$x_A < x_B$ の場合（$B$ の勝利）：}
+    同様の計算式により $A$ にダメージを与え、$HP_A, ST_A$ を更新する。
+
+    \item \textbf{$x_A = x_B$ の場合（引き分け）：}
+    状態更新なし。
+\end{itemize}
+
+\subsection{ケース(ii)：一方のダイスが尽きている場合 ($i > k_B$ の場合)}
+$A$ のダイス $d_{A, i}$ は「一方的攻撃」となる。
+$A$ はダイスをロールして $x_A = X(d_{A, i})$ を得て、対抗判定なしで $B$ にダメージを与える。
+
+\section{混乱（Stagger）状態のフラグ遷移}
+各ステップ計算後、$ST \le 0$ となったキャラクターは「混乱状態（Staggered）」に遷移する。
+\begin{itemize}
+    \item 混乱状態のキャラクターは、次ターンの全行動権（スロット）を喪失する。
+    \item 混乱状態の間、耐性ベクトルは強制的に全属性で $R_{hp} = 2.0, R_{st} = 2.0$（最大被ダメージ倍率）へ書き換わる。
+\end{itemize}
+
+\end{document}
