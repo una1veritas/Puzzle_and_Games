@@ -39,3 +39,4 @@ __pycache__/
 *.pyc
 Mancala/data.txt
 Mancala/pairs.db
+Mancala/.DS_Store
