@@ -12,25 +12,25 @@ class Sudoku():
             raise RuntimeError('Invalid size.')
         self.size = int(size)
         self.sizefactor = int(math.sqrt(self.size))
-        self.boxes = [0 for i in range(self.size**2)]
+        self.bitsets = [0 for i in range(self.size**2)]
         if isinstance(grid, (str,list)):
-            for i in range(len(self.boxes)):
-                self.boxes[i] = int(grid[i])
+            for i in range(len(self.bitsets)):
+                self.bitsets[i] = int(grid[i])
     
     def index(self, row, col):
         return row*self.size+col
     
-    def at(self, row, col):
-        return self.boxes[self.index(row,col)]
+    def number_at(self, row, col):
+        return self.bitsets[self.index(row,col)]
 
-    def put(self, row, col, num):
-        self.boxes[self.index(row,col)] = num
+    def number_put(self, row, col, num):
+        self.bitsets[self.index(row,col)] = num
 
     def __str__(self):
         tmp = ''
         for r in range(self.size):
             for c in range(self.size):
-                tmp += str(self.at(r, c) if self.at(r, c) != 0 else ' ')
+                tmp += str(self.number_at(r, c) if self.number_at(r, c) != 0 else ' ')
                 if c % self.sizefactor == self.sizefactor - 1:
                     tmp += '|'
                 else:
@@ -58,11 +58,11 @@ class Sudoku():
                 yield (r, col)      
 
     def allowednum(self, row, col):
-        if self.at(row, col) != 0:
-            return {self.at(row, col)}
+        if self.number_at(row, col) != 0:
+            return {self.number_at(row, col)}
         cand = set([1,2,3,4,5,6,7,8,9])
         for (r,c) in self.affectboxes(row,col):
-            cand.discard(self.at(r,c))
+            cand.discard(self.number_at(r,c))
         return cand
     
     def refine(self):
@@ -70,7 +70,7 @@ class Sudoku():
             print(sudoku)
             fixable = list()
             for (r,c) in [(r,c) for r in range(9) for c in range(9)]:
-                if self.at(r,c) != 0 :
+                if self.number_at(r,c) != 0 :
                     continue
                 cand = self.allowednum(r,c)
                 if len(cand) == 1:
@@ -79,11 +79,11 @@ class Sudoku():
             if len(fixable) == 0 :
                 break
             for (r,c,num) in fixable:
-                self.put(r,c,num)
+                self.number_put(r,c,num)
         return 
             
     def solved(self):
-        for each in self.boxes:
+        for each in self.bitsets:
             if each != 0 :
                 return False
         return True

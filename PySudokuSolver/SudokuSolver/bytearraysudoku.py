@@ -11,7 +11,7 @@ class Sudoku():
             self.array = bytearray( (len(arg)+1)>>1 )
             for r in range(self.size):
                 for c in range(self.size):
-                    self.put(r,c,int(arg[self.size*r+c]))
+                    self.number_put(r,c,int(arg[self.size*r+c]))
         elif isinstance(arg,bytearray) and len(arg) in [8,41,128]:
             self.size = int(math.sqrt(len(arg)*2))
             self.array = copy.copy(arg)
@@ -62,19 +62,19 @@ class Sudoku():
     # def index(self,row,col):
     #     return row*self.size + col
     #
-    # def put(self,row,col,num):
+    # def number_put(self,row,col,num):
     #     if num == 0 :
     #         return True
     #     #print(bin(self.bits_at(row, col)),num)
     #     if self.bits_at(row, col) & self.bits(num) == 0 :
-    #         raise RuntimeError('Illegal placement of number {} at {},{}'.format(num,row,col))
+    #         raise RuntimeError('Illegal placement of number {} number_at {},{}'.format(num,row,col))
 
     def make_allowedmap(self):
         onetonine = [n for n in range(1,10)]
         allowed =  [set(onetonine) if self.index_at(i) == 0 else set([self.index_at(i)]) for i in range(self.size**2)]
         for row in range(self.size):
             for col in range(self.size):
-                num = self.at(row,col)
+                num = self.number_at(row,col)
                 if num != 0 :
                     for r,c in self.relatecells(row, col):
                         if r == row and c == col :
@@ -93,14 +93,14 @@ class Sudoku():
         else:
             return (self.array[ix>>1]>>4) & 0x0f
         
-    def at(self,row,col):
+    def number_at(self,row,col):
         ix = row*self.size+col
         if (ix & 1) == 0 :
             return self.array[ix>>1] & 0x0f
         else:
             return (self.array[ix>>1]>>4) & 0x0f
         
-    def put(self,row,col,num):
+    def number_put(self,row,col,num):
         ix = row*self.size+col
         #print(row,col,ix,num,ix>>1, ix&1,num if ix&1 == 0 else num<<4)
         if (ix & 1) == 0 :
@@ -119,7 +119,7 @@ class Sudoku():
         tmp = ''
         for r in range(self.size):
             for c in range(self.size):
-                tmp += str(self.at(r, c) if self.at(r, c) != 0 else ' ')
+                tmp += str(self.number_at(r, c) if self.number_at(r, c) != 0 else ' ')
                 if c % factor == factor - 1:
                     tmp += '|'
                 else:
@@ -140,10 +140,10 @@ class Sudoku():
         return self.array == another.array 
     
 
-    # def at(self, row, col):
+    # def number_at(self, row, col):
     #     return self.cells[self.index(row,col)]
     #
-    # def put(self, row, col, num):
+    # def number_put(self, row, col, num):
     #     self.cells[self.index(row,col)] = num
     #
     # def index(self, row, col):
@@ -152,7 +152,7 @@ class Sudoku():
     def issolved(self):
         for r in range(self.size):
             for c in range(self.size):
-                if self.at(r,c) == 0 :
+                if self.number_at(r,c) == 0 :
                     return False
         return True
     
@@ -202,7 +202,7 @@ class Sudoku():
                         n = e
                         break
                     places.add( (r,c) )
-                    self.put(r,c,n)
+                    self.number_put(r,c,n)
         return True
     
     def fillsomecell(self):
@@ -213,16 +213,16 @@ class Sudoku():
             for c in range(self.size):
                 if len(allowed[r*self.size + c]) == 1 :
                     continue
-                #print("allowed at ", allowed[r*self.size + c])
+                #print("allowed number_at ", allowed[r*self.size + c])
                 for i in allowed[r*self.size+c]:
                     s = Sudoku(self)
-                    s.put(r,c,i)
+                    s.number_put(r,c,i)
                     a = copy.deepcopy(allowed)
                     a[r*self.size+c].discard(i)
                     #print(s,a,"\n",i)
                     if s.tighten(a) :
                         filled.append(s)
-                        # print("tighten by put ",r,c,i)
+                        # print("tighten by number_put ",r,c,i)
                         # print(s)
                     # else:
                     #     print("false by ",r,c,i)

@@ -23,7 +23,7 @@ class Sudoku():
         tmp = ''
         for r in range(self.size):
             for c in range(self.size):
-                tmp += str(self.at(r, c) if self.at(r, c) != 0 else ' ')
+                tmp += str(self.number_at(r, c) if self.number_at(r, c) != 0 else ' ')
                 if c % factor == factor - 1:
                     tmp += '|'
                 else:
@@ -44,10 +44,10 @@ class Sudoku():
             return self.cells == another.cells
         return False 
     
-    def at(self, row, col):
+    def number_at(self, row, col):
         return self.cells[self.index(row,col)]
 
-    def put(self, row, col, num):
+    def number_put(self, row, col, num):
         self.cells[self.index(row,col)] = num
     
     def index(self, row, col):
@@ -62,12 +62,12 @@ class Sudoku():
             rownums.clear()
             colnums.clear()
             for c in range(self.size) :
-                num = self.at(r,c)
+                num = self.number_at(r,c)
                 if 0 < num <= self.size and num not in rownums :
                     rownums.add(num)
                 else:
                     return False
-                num = self.at(c,r)
+                num = self.number_at(c,r)
                 if 0 < num <= self.size and num not in colnums :
                     colnums.add(num)
                 else:
@@ -77,7 +77,7 @@ class Sudoku():
                 blocknums.clear()
                 for r in range(row, row+self.SIZE_FACTORS[self.size]):
                     for c in range(col,col+self.SIZE_FACTORS[self.size]):
-                        num = self.at(r,c)
+                        num = self.number_at(r,c)
                         if 0 < num <= self.size and num not in blocknums:
                             blocknums.add(num)
                         else:
@@ -104,18 +104,18 @@ class Sudoku():
             yield (r, col)
 
     def allowednumbers(self, row, col):
-        if self.at(row, col) != 0:
+        if self.number_at(row, col) != 0:
             return set()
         cands = set([i for i in range(1,self.size+1)])
         for (r,c) in self.affectcells(row,col):
-            cands.discard(self.at(r,c))
+            cands.discard(self.number_at(r,c))
         return cands
     
     def filluniquepossibility(self):
         tobefixed = set()
         for r in range(self.size): 
             for c in range(self.size):
-                if self.at(r,c) == 0 :
+                if self.number_at(r,c) == 0 :
                     tobefixed.add( (r,c) )
         while bool(tobefixed):
             #print(sudoku)
@@ -126,11 +126,11 @@ class Sudoku():
                 return False
             elif len(cand) == 1:
                 num = cand.pop()
-                self.put(r,c,num)
+                self.number_put(r,c,num)
                 for row, col in self.affectcells(r, c):
                     # if row == r and col == c:
                     #     continue
-                    if self.at(row,col) == 0:
+                    if self.number_at(row,col) == 0:
                         tobefixed.add((row,col))
             #print(len(tobefixed),end=",")
             #self.checkAll()
@@ -144,17 +144,17 @@ class Sudoku():
                 possmap[(r,c)] = set([1,2,3,4,5,6,7,8,9])
         #row rules
         for r in range(self.size): 
-            fixednums = set([self.at(r,c) for c in range(self.size) if self.at(r,c) != 0])
+            fixednums = set([self.number_at(r,c) for c in range(self.size) if self.number_at(r,c) != 0])
             for c in range(self.size): 
-                if self.at(r,c) != 0 :
-                    possmap[(r,c)] = set([self.at(r,c)])
+                if self.number_at(r,c) != 0 :
+                    possmap[(r,c)] = set([self.number_at(r,c)])
                 else:
                     possmap[(r,c)] -= fixednums
         #column rules
         for c in range(self.size): 
-            fixednums = set([self.at(r,c) for r in range(self.size) if self.at(r,c) != 0])
+            fixednums = set([self.number_at(r,c) for r in range(self.size) if self.number_at(r,c) != 0])
             for r in range(self.size): 
-                if self.at(r,c) == 0 :
+                if self.number_at(r,c) == 0 :
                     possmap[(r,c)] -= fixednums
         #block rules 
         szfactor = self.SIZE_FACTORS[self.size]
@@ -163,18 +163,18 @@ class Sudoku():
                 fixednums = set()
                 for r in range(br*szfactor,(br+1)*szfactor):
                     for c in range(bc*szfactor,(bc+1)*szfactor):
-                        if self.at(r,c) != 0 :
-                            fixednums.add(self.at(r,c))
+                        if self.number_at(r,c) != 0 :
+                            fixednums.add(self.number_at(r,c))
                 for r in range(br*szfactor,(br+1)*szfactor):
                     for c in range(bc*szfactor,(bc+1)*szfactor):
-                        if self.at(r,c) == 0 :
+                        if self.number_at(r,c) == 0 :
                             possmap[(r,c)] -= fixednums
         return possmap
     
     def updatepossibilitymap(self, possmap, row, col, num):
         possmap[(row,col)] = set([num])
         for (r,c) in self.affectcells(row,col):
-            if self.at(r,c) == 0 :
+            if self.number_at(r,c) == 0 :
                 possmap[(r,c)] -= set([num])
         
     def trytofill(self):
@@ -187,9 +187,9 @@ class Sudoku():
                 return False
             #
             # for (r,c) in possmap:
-            #     if self.at(r,c) == 0 and len(possmap[(r,c)]) == 1 :
+            #     if self.number_at(r,c) == 0 and len(possmap[(r,c)]) == 1 :
             #         elem = list(possmap[(r,c)])[0]
-            #         self.put(r,c,elem)
+            #         self.number_put(r,c,elem)
             #         self.updatepossibilitymap(possmap, r, c, elem)
             #         updated = True
             # if updated: continue
@@ -208,7 +208,7 @@ class Sudoku():
             for c in range(self.size):
                 for i in self.allowednumbers(r,c):
                     s = Sudoku(self.cells)
-                    s.put(r,c,i)
+                    s.number_put(r,c,i)
                     # print(r,c,i)
                     filled.append(s)
         return filled
