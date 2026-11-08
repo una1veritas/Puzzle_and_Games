@@ -40,7 +40,6 @@ class Sudoku():
     @staticmethod
     def bitset_next(bitset: int, curr: int) -> int | None:
         """curr == -1 で最初のビット位置 (0~15) を返す。
-        
         curr が 0~14 の場合はそれより大きい次のビット位置を返す。 なければ None。
         """
         if curr == -1:
@@ -304,8 +303,8 @@ class Sudoku():
         
         fixedrc = [self.rowcol(ix) for ix in cellixs if self.bitsets[ix].bit_count() == 1]
         blankrc = [self.rowcol(ix) for ix in cellixs if self.bitsets[ix].bit_count() > 1]
-        print(fixedrc)
-        print([(r,c, self.bitset_at(r,c).bit_count()) for r,c in blankrc])
+        # print(fixedrc)
+        # print([(r,c, self.bitset_at(r,c).bit_count()) for r,c in blankrc])
         # reduce by settled/fixed cells
         blankrc_set = set(blankrc)
         for row,col in fixedrc:
@@ -323,21 +322,20 @@ class Sudoku():
         # make an assumption and reductions
         cellixs = sorted(range(len(self.bitsets)), key=lambda ix: self.bitsets[ix].bit_count() )
         fixedrc = [self.rowcol(ix) for ix in cellixs if self.bitsets[ix].bit_count() == 1]
-        blankrc = [self.rowcol(ix) for ix in cellixs if self.bitsets[ix].bit_count() > 1]        
-        print([(r,c, self.bitset_at(r,c).bit_count()) for r,c in blankrc])
+        path = [self.rowcol(ix) + (self.bitsets[ix], ) for ix in cellixs if self.bitsets[ix].bit_count() > 1]        
+        print([(r,c,bin(b)) for r,c,b in path])
         # searching the assumption tree by traversing the blankrc path 
         ix = 0
-        path = []
-        while True:
-            r, c = blankrc[ix]
-            top = path[-1] if len(path) > 0 else (r, c, -1)
-            if top[:2] == (r,c) :
-                curr = top[2]
-                nxt = self.bitset_next(self.bitset_at(r,c), curr)
-                path[-1] = (r,c,nxt)
-                ...
-            elif 
-                ...
+        while ix >= 0:
+            top = path[0]
+            r, c, bits = top
+            nxt = self.bitset_next(bits, -1)
+            print(f"row={r}, col={c}, ", self.bitset_at(r,c).bit_count(), bin(bits), nxt)
+            break
+            #     path[-1] = (r,c,nxt)
+            #     ...
+            # elif 
+            #     ...
         
         return
         
@@ -376,8 +374,8 @@ if __name__ == '__main__':
         #solved = list()
         dt = datetime.datetime.now()
         
-        s.solve()
-        # s.reduce()
+        #s.solve()
+        s.reduce()
 
         delta = datetime.datetime.now() - dt
         millis = delta.seconds*1000+ delta.microseconds/1000
