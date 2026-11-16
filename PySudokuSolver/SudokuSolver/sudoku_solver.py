@@ -38,22 +38,18 @@ class Sudoku():
             bits >>= 1
     
     @staticmethod
-    def bitset_next(bitset: int, curr: int) -> int | None:
-        """curr == -1 で最初のビット位置 (0~15) を返す。
-        curr が 0~14 の場合はそれより大きい次のビット位置を返す。 なければ None。
-        """
-        if curr == -1:
-          higher_bits = bitset
-        else:
-          # curr 以下のビット（0〜curr 番目）をすべてクリア
-          higher_bits = bitset & ~((1 << (curr + 1)) - 1)
-        
-        if not higher_bits:
-          return None
-        
-        # 最下位ビット (LSB) のインデックス (0〜15) を取得
-        return (higher_bits & -higher_bits).bit_length() - 1
+    def ctz(x: int) -> int:
+        if x == 0:
+            raise ValueError("ctz is undefined for 0")
+        return (x & -x).bit_length() - 1
 
+    @staticmethod
+    def bitset_next(bits: int, elem: int) -> int:
+        if elem != 0 :
+            # 0〜 poscurr 番目のビットをクリア
+            bits = bits & ~((1 << elem) - 1)
+        return (bits & -bits).bit_length()
+    
     def __init__(self, arg):
         if isinstance(arg,(str,list,tuple)):
             arg = [int(e) for e in arg if (isinstance(e, int) or e.isdigit()) and int(e) in (0,1,2,3,4,5,6,7,8,9)]
@@ -325,13 +321,20 @@ class Sudoku():
         path = [self.rowcol(ix) + (self.bitsets[ix], ) for ix in cellixs if self.bitsets[ix].bit_count() > 1]        
         print([(r,c,bin(b)) for r,c,b in path])
         # searching the assumption tree by traversing the blankrc path 
+        assignment = dict()
         ix = 0
-        while ix >= 0:
-            top = path[0]
+        while ix >= 0 and ix < len(path):
+            top = list(path[ix])
             r, c, bits = top
-            nxt = self.bitset_next(bits, -1)
-            print(f"row={r}, col={c}, ", self.bitset_at(r,c).bit_count(), bin(bits), nxt)
-            break
+            nxt = self.bitset_next(bits, 0)
+            print(f"row={r}, col={c}, ", bin(bits), nxt)
+            bits = bits & ~((1<<nxt) - 1)
+            top[2] = bits
+            path[ix] = tuple(top)
+            assignment[(r,c)] = nxt
+            ix += 1
+            print([(r,c,bin(b)) for r,c,b in path])
+            print(ix, assignment)
             #     path[-1] = (r,c,nxt)
             #     ...
             # elif 
