@@ -1,0 +1,82 @@
+\documentclass[a4paper,11pt]{ltjsarticle}
+\usepackage{amsmath, amssymb}
+\usepackage{bm}
+\usepackage{geometry}
+\geometry{margin=25mm}
+
+\title{チーム編成ログからのキャラクター相性抽出と3人目推薦のモデル化}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{「相性」を2種類の $N \times N$ 行列（ヒートマップ）に落とす}
+
+3人組のままだと組み合わせ爆発（${}_{80}\mathrm{C}_3 \approx 8\text{万通り}$）で1マスあたりの試合数が疎になるため、まずはペア（2体関係）に分解して集計する。
+
+\begin{itemize}
+  \item \textbf{味方シナジー行列（Synergy）}：同じチームにキャラクター $A$ と $B$ が同時に編成された試合の勝率。
+  \item \textbf{対面カウンター行列（Matchup）}：自チームに $A$、相手チームに $B$ がいた試合の $A$ 側の勝率。
+\end{itemize}
+
+\subsection*{単体勝率からのリフト値（残差）による定義}
+
+単なる生勝率でヒートマップを描くと、「そもそも単体スペックが高くて勝率が高い強キャラ」の行・列が全体的に高くなるだけで、純粋な「組み合わせの相性」が見えなくなる。そこで、単体勝率からの期待値との差分（リフト値・残差）をとって行列要素を定義する。
+
+\begin{equation}
+  \mathrm{Synergy}(A, B) = P(\mathrm{Win} \mid A, B \in \mathrm{Team}) - \frac{P(\mathrm{Win} \mid A) + P(\mathrm{Win} \mid B)}{2}
+\end{equation}
+
+同様に対面カウンター行列についても、単体勝率の期待値からの差分として定義する。
+
+\begin{equation}
+  \mathrm{Matchup}(A, B) = P(\mathrm{Win}_A \mid A \in \mathrm{Team}, B \in \mathrm{Enemy}) - \left( 0.5 + \frac{P(\mathrm{Win} \mid A) - P(\mathrm{Win} \mid B)}{2} \right)
+\end{equation}
+
+※ 味方シナジー行列と対面カウンター行列は意味が逆であるため、足し合わせずに別々の行列として保持する。
+
+\section{共起・シナジーネットワーク図（3人組の発見）}
+
+上記の「シナジー値が高いペア」だけをエッジで結んだ無向グラフ（ばねモデルによる自動レイアウト）を描画する。
+
+\begin{itemize}
+  \item 相性の良いペア同士が引き合うように配置されるため、結果として「環境で強い3人組（トリオ）」が三角形のクラスター（コミュニティ）として視覚的に浮き上がる，ことを期待。
+\end{itemize}
+
+\section{ロジスティック回帰（拡張Bradley-Terryモデル）によるパラメータ推定}
+
+単純集計では「対戦数が少ないマイナーな組み合わせ」の勝率が極端（0\%や100\%）に振れてノイズになる。これを抑えるため、勝敗 $y \in \{0, 1\}$ を以下の特徴量でL2（ユークリッド距離）正則化付きロジスティック回帰にかけ、パラメータを推定する。
+
+\begin{itemize}
+  \item 自チームのキャラクター $i$ の存在フラグ（$x_i = +1$）、敵チームのキャラクター $j$ の存在フラグ（$x_j = -1$） \\
+  $\rightarrow$ 回帰係数 $\beta_i$ が\textbf{「キャラクター単体の強さ」}を表す。
+  \item 自チーム内のペア $(i, j)$ の共起フラグ（$z_{ij} = +1$）、敵チーム内のペア $(k, l)$ の共起フラグ（$z_{kl} = -1$） \\
+  $\rightarrow$ 回帰係数 $\gamma_{ij}$ が\textbf{「単体の強さを差し引いた純粋な味方シナジー（相性値）」}を表す。
+  \item 自チームの $i$ と敵チームの $j$ の対面フラグ（$w_{ij} = +1$） \\
+  $\rightarrow$ 回帰係数 $\delta_{ij}$ が\textbf{「対面カウンターの相性値」}を表す。
+\end{itemize}
+
+\section{「2人決まった状態での3人目選び」のモデル化}
+
+組み合わせの対称性・交換可能性を仮定する。
+ログに選択順序（ピック順）が記録されていなくても、任意の3人組 $\{A, B, C\}$ の試合ログは、「$A$ と $B$ が先に決まっていて、3人目に $C$ を選んだ状況」のサンプルとしてそのまま扱うことができる。
+
+すでに確定している味方2体 $\{A, B\}$ および相手チーム $\mathrm{Enemy}$ に対し、3人目の候補キャラクター $C$ を加えたときの評価スコアを以下のように定義する。
+
+\begin{equation}
+  \mathrm{Score}(C \mid A, B, \mathrm{Enemy}) = \underbrace{\beta_C}_{C\text{単体の強さ}} + \underbrace{\gamma_{AC} + \gamma_{BC}}_{\text{味方2人とのシナジー}} + \underbrace{\sum_{E \in \mathrm{Enemy}} \delta_{CE}}_{\text{敵チームへのカウンター}}
+\end{equation}
+
+これにより、味方に $A$ と $B$ が確定し、敵に $\mathrm{Enemy}$ が見えている状況において、どのキャラクター $C$ を選べば勝率が最大になるかをランキング形式で算出できる。
+
+\section{視覚化のアイデア（3人目の推薦をどう見せるか）}
+
+\begin{itemize}
+  \item \textbf{条件付き勝率の棒グラフ（またはランキング表）}：\\
+  代表的なペア（例：タンク＋ヒーラーなど）をいくつか固定し、「この2人が決まっているとき、3人目に誰を入れると勝率が最も上昇するか（あるいは低下するか）」をソートして並べる。
+  \item \textbf{役割（ロール）への集約}：\\
+  全キャラクターのままだと組み合わせが細かすぎるため、公式のクラス分類（タンク、アサシン、サポート、スナイパー等）に集約し、「$\{\text{タンク}, \text{サポート}\}$ の2人が決まったとき、3人目はどのロールを選ぶべきか」という $N_{\mathrm{role}}^2 \times N_{\mathrm{role}}$ の小さな表にまとめる。これによりデータ不足（スパース性）が解消され、人間が理解できる戦略（定石）として整理しやすくなる。
+\end{itemize}
+
+\end{document}
