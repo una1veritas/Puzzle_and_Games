@@ -194,8 +194,15 @@ if __name__ == "__main__":
         number=number
     )
         
+    rand.seed(1)
+    time3 = timeit.timeit(
+        lambda: [rand.randint(1,2**16).bit_length() for _ in range(number)],
+        number=number
+    )
+
     print(f"bin ({number} runs):  {time1:.6f}s (avg: {time1/number:.6f}s)")
     print(f"shift ({number} runs):  {time2:.6f}s (avg: {time2/number:.6f}s)")
+    print(f"bit_length ({number} runs):  {time3:.6f}s (avg: {time3/number:.6f}s)")
     print()
     # benchmark = FunctionBenchmark()
     # benchmark.compare([

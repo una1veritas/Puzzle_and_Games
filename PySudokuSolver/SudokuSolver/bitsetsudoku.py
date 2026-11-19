@@ -59,24 +59,24 @@ class Sudoku():
     def bits_at(self,row,col):
         return self.array[row*self.size+col]
     
-    def at(self,row,col):
+    def number_at(self,row,col):
         return self.debits(self.bits_at(row,col))
     
     def bits_put(self,row,col,bval):
         self.array[row*self.size+col] = bval
 
-    def put(self,row,col, ival):
+    def number_put(self,row,col, ival):
         self.array[row*self.size+col] = self.bits(ival)
 
     def fix(self,row,col, ival):
         self.array[row*self.size+col] &= self.bits(0) ^ self.bits(ival)
 
-    # def put(self,row,col,num):
+    # def number_put(self,row,col,num):
     #     if num == 0 :
     #         return True
     #     #print(bin(self.bits_at(row, col)),num)
     #     if self.bits_at(row, col) & self.bits(num) == 0 :
-    #         raise RuntimeError('Illegal placement of number {} at {},{}'.format(num,row,col))
+    #         raise RuntimeError('Illegal placement of number {} number_at {},{}'.format(num,row,col))
     #     updates = list()
     #     updates.append((row,col,num))
     #     while bool(updates) :
@@ -103,7 +103,7 @@ class Sudoku():
         tmp = ''
         for r in range(self.size):
             for c in range(self.size):
-                tmp += str(self.at(r, c) if self.at(r, c) != 0 else ' ')
+                tmp += str(self.number_at(r, c) if self.number_at(r, c) != 0 else ' ')
                 if c % factor == factor - 1:
                     tmp += '|'
                 else:
@@ -124,10 +124,10 @@ class Sudoku():
             return self.array == another.array
         return False 
     
-    # def at(self, row, col):
+    # def number_at(self, row, col):
     #     return self.cells[self.index(row,col)]
     #
-    # def put(self, row, col, num):
+    # def number_put(self, row, col, num):
     #     self.cells[self.index(row,col)] = num
     #
     # def index(self, row, col):
@@ -180,7 +180,7 @@ class Sudoku():
     #         fix = None
     #         for r in range(9):
     #             for c in range(9):
-    #                 if self.at(r,c) != 0 : 
+    #                 if self.number_at(r,c) != 0 : 
     #                     continue
     #                 cand = self.allowednumbers(r,c)
     #                 #print(cand)
@@ -192,7 +192,7 @@ class Sudoku():
     #         if fix == None :
     #             return True
     #         (r,c,num) = fix
-    #         self.put(r,c,num)
+    #         self.number_put(r,c,num)
     #         #print("({},{}) <- {}".format(r,c,num))
     #         #self.checkAll()
     #         #print()
@@ -204,7 +204,7 @@ class Sudoku():
             for c in range(self.size):
                 for i in self.allowed(r,c):
                     s = Sudoku(self)
-                    if s.put(r,c,i):
+                    if s.number_put(r,c,i):
                         # print(r,c,i)
                         filled.append(s)
         return filled
