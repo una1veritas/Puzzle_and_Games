@@ -2,7 +2,7 @@
 import duckdb
 import sys
 
-JSONL_FILE = "battlelogs.jsonl"
+JSONL_FILE = "battlelogs100.jsonl"
 DB_FILE = "brawl_data.duckdb"
 GAME_MODES = ["gemGrab", "showdown", "brawlBall", "bounty", "heist", "siege", "hotZone", "knockout"]
 GAMO_MODE_CHOICE = GAME_MODES[2]  # 例: brawlBall を選択
@@ -68,7 +68,8 @@ matches = con.execute(f"""
 """)
 
 for a_match in matches.fetchall():
-    # b_time, mode, map_name, result, duration, teams = a_match
+    print(a_match)
+    b_time, mode, map_name, result, duration, teams = a_match
     # print(f"対戦日時  : {b_time}")
     # print(f"モード    : {mode}")
     # print(f"マップ    : {map_name}")
