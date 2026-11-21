@@ -14,6 +14,28 @@ class GameState:
         "Monkey": "blue", "Mantis": "red", "Horse": "red", "Ox": "blue",
         "Crane": "blue", "Boar": "red", "Eel": "blue", "Cobra": "red",
     }
+    
+    CARD_MOVES: ClassVar[dict] = {
+        # --- BLUE (0..7) ---
+        "Tiger":  [(-2, 0), (1, 0)],
+        "Crab":   [(-1, 0), (0, -2), (0, 2)],
+        "Monkey": [(-1, -1), (-1, 1), (1, -1), (1, 1)],
+        "Crane":  [(-1, 0), (1, -1), (1, 1)],
+        "Rabbit": [(0, 2), (-1, 1), (1, -1)],    # Frogの鏡像
+        "Goose":  [(-1, -1), (0, -1), (0, 1), (1, 1)], # Roosterの鏡像
+        "Ox":     [(-1, 0), (0, 1), (1, 0)],     # Horseの鏡像
+        "Eel":    [(-1, -1), (0, 1), (1, -1)],   # Cobraの鏡像
+    
+        # --- RED (8..15) ---
+        "Dragon":   [(-1, -2), (-1, 2), (1, -1), (1, 1)],
+        "Elephant": [(-1, -1), (-1, 1), (0, -1), (0, 1)],
+        "Mantis":   [(-1, -1), (-1, 1), (1, 0)],
+        "Boar":     [(-1, 0), (0, -1), (0, 1)],
+        "Frog":     [(0, -2), (-1, -1), (1, 1)],   # Rabbitの鏡像
+        "Rooster":  [(-1, 1), (0, -1), (0, 1), (1, -1)], # Gooseの鏡像
+        "Horse":    [(-1, 0), (0, -1), (1, 0)],    # Oxの鏡像
+        "Cobra":    [(-1, 1), (0, -1), (1, 1)],    # Eelの鏡像
+    }
 
     # (dr, dc): 下側(BLUE)から見た前進が dr < 0
     CARD_MOVES: ClassVar[dict] = {
@@ -63,9 +85,32 @@ class GameState:
             self.board[4 * 5 + col] = (self.PLAYER_BLUE << 2) | ptype
             self.board[0 * 5 + col] = (self.PLAYER_RED << 2) | ptype
 
+    # bytearray(25) -> 100bit int（リトルエンディアン的なパック）
+    # 各バイトの上位4bitは0なので、16進文字列経由で一発変換できる
+    def board_int(self):
+        return int.from_bytes(bytes((((self.board[i+1] if i < 25 - 1 else 0)<<4) | self.board[i]) for i in range(0, 25, 2)), "little") # ※あるいは単純なシフト合算
+
+    def card_int(self):
+        return int.from_bytes(bytes((((self.cards[i+1]-1 if i < 5 - 1 else self.turn)<<4) | self.cards[i]-1) for i in range(0, 5, 2)), "little") # ※あるいは単純なシフト合算
+
+    def __int__(self):
+        return (self.card_int() << 100) | self.board_int()
+    
+    @classmethod
+    def from_int(cls, val: int) -> "GameState":
+        obj = cls.__new__(cls)
+        obj.board = bytearray((val >> (i * 4)) & 0xF for i in range(25))
+        obj.cards = bytearray(((val >> (100 + i * 4)) & 0xF) + 1 for i in range(5))
+        obj.turn = (val >> 120) & 0x3  # PLAYER_BLUE(1) または PLAYER_RED(2) がそのまま戻る
+        return obj
+
+    def piece_at(self, row, col):
+        cellval = self.board[row * 5 + col]
+        return ((cellval >> 2) & 3, cellval & 3)
+    
     def legal_destinations(self, r, c, card_id):
         """(r, c)の駒に card_id を使ったときの合法な移動先リストを返す"""
-        player, ptype = self.piece(self.board[r * 5 + c])
+        player, _ = self.piece_at(r, c)
         if player != self.turn:
             return []
         card_name = self.CARD_NAMES[card_id - 1]
@@ -74,7 +119,7 @@ class GameState:
         for dr, dc in self.CARD_MOVES[card_name]:
             nr, nc = r + sign * dr, c + sign * dc
             if 0 <= nr < 5 and 0 <= nc < 5:
-                target_player, _ = self.piece(self.board[nr * 5 + nc])
+                target_player, _ = self.piece_at(nr, nc)
                 if target_player != player:  # 自駒の上には移動不可
                     dests.append((nr, nc))
         return dests
@@ -119,6 +164,35 @@ class OnitamaGUI:
 
         self.draw_all()
 
+    # def draw_card(self, parent, card_id, slot=None, rotate=False):
+    #     name = self.state.CARD_NAMES[card_id - 1]
+    #     is_selected = (slot is not None and slot == self.selected_slot)
+    #     bg = "#fff2cc" if is_selected else "#f0f0f0"
+    #     relief = tk.SUNKEN if is_selected else tk.RAISED
+    #
+    #     frame = tk.Frame(parent, bd=2, relief=relief, bg=bg, padx=4, pady=4)
+    #     lbl = tk.Label(frame, text=name, bg=bg, font=("Helvetica", 10, "bold"))
+    #     lbl.pack()
+    #
+    #     cv = tk.Canvas(frame, width=75, height=75, bg="white", highlightthickness=0)
+    #     cv.pack()
+    #     sign = -1 if rotate else 1
+    #     moves = {(2 + sign * dr, 2 + sign * dc) for dr, dc in self.state.CARD_MOVES[name]}
+    #
+    #     for r in range(5):
+    #         for c in range(5):
+    #             color = "white"
+    #             if (r, c) == (2, 2):
+    #                 color = "#444444"
+    #             elif (r, c) in moves:
+    #                 color = "#4a90e2" if self.state.CARD_STAMP[name] == "blue" else "#e24a4a" #color = "#4a90e2" if not rotate else "#e24a4a"
+    #             cv.create_rectangle(c*15, r*15, (c+1)*15, (r+1)*15, fill=color, outline="#cccccc")
+    #
+    #     if slot is not None:
+    #         for w in (frame, lbl, cv):
+    #             w.bind("<Button-1>", lambda e, s=slot: self.on_card_click(s))
+    #     return frame
+
     def draw_card(self, parent, card_id, slot=None, rotate=False):
         name = self.state.CARD_NAMES[card_id - 1]
         is_selected = (slot is not None and slot == self.selected_slot)
@@ -126,13 +200,23 @@ class OnitamaGUI:
         relief = tk.SUNKEN if is_selected else tk.RAISED
 
         frame = tk.Frame(parent, bd=2, relief=relief, bg=bg, padx=4, pady=4)
-        lbl = tk.Label(frame, text=name, bg=bg, font=("Helvetica", 10, "bold"))
-        lbl.pack()
 
-        cv = tk.Canvas(frame, width=75, height=75, bg="white", highlightthickness=0)
+        # ラベル(高さ22px) + 5x5グリッド(75px) を1つのCanvasにまとめる
+        cv = tk.Canvas(frame, width=75, height=97, bg=bg, highlightthickness=0)
         cv.pack()
+
+        if rotate:
+            # 180度回転時: グリッドを上(y=0..75)、逆さまのカード名を下(y=86)に配置
+            grid_y0 = 0
+            cv.create_text(37, 86, text=name, font=("Helvetica", 10, "bold"), angle=180)
+        else:
+            # 通常時: カード名を上(y=11)、グリッドを下(y=22..97)に配置
+            grid_y0 = 22
+            cv.create_text(37, 11, text=name, font=("Helvetica", 10, "bold"))
+
         sign = -1 if rotate else 1
         moves = {(2 + sign * dr, 2 + sign * dc) for dr, dc in self.state.CARD_MOVES[name]}
+        stamp_color = "#4a90e2" if self.state.CARD_STAMP[name] == "blue" else "#e24a4a"
 
         for r in range(5):
             for c in range(5):
@@ -140,11 +224,12 @@ class OnitamaGUI:
                 if (r, c) == (2, 2):
                     color = "#444444"
                 elif (r, c) in moves:
-                    color = "#4a90e2" if not rotate else "#e24a4a"
-                cv.create_rectangle(c*15, r*15, (c+1)*15, (r+1)*15, fill=color, outline="#cccccc")
+                    color = stamp_color
+                y1 = grid_y0 + r * 15
+                cv.create_rectangle(c * 15, y1, (c + 1) * 15, y1 + 15, fill=color, outline="#cccccc")
 
         if slot is not None:
-            for w in (frame, lbl, cv):
+            for w in (frame, cv):
                 w.bind("<Button-1>", lambda e, s=slot: self.on_card_click(s))
         return frame
 

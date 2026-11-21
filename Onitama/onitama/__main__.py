@@ -7,7 +7,6 @@ from typing import ClassVar
 from dataclasses import dataclass, field
 from itertools import product
 import random
-from inspect import isclass
 
 @dataclass
 class GameState:
