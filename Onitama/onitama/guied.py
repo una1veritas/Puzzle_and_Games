@@ -37,26 +37,6 @@ class GameState:
         "Cobra":    [(-1, 1), (0, -1), (1, 1)],    # Eelの鏡像
     }
 
-    # (dr, dc): 下側(BLUE)から見た前進が dr < 0
-    CARD_MOVES: ClassVar[dict] = {
-        "Tiger":    [(-2, 0), (1, 0)],
-        "Dragon":   [(-1, -2), (-1, 2), (1, -1), (1, 1)],
-        "Frog":     [(0, -2), (-1, -1), (1, 1)],
-        "Rabbit":   [(0, 2), (-1, 1), (1, -1)],
-        "Crab":     [(-1, 0), (0, -2), (0, 2)],
-        "Elephant": [(-1, -1), (-1, 1), (0, -1), (0, 1)],
-        "Goose":    [(-1, -1), (0, -1), (0, 1), (1, 1)],
-        "Rooster":  [(-1, 1), (0, -1), (0, 1), (1, -1)],
-        "Monkey":   [(-1, -1), (-1, 1), (1, -1), (1, 1)],
-        "Mantis":   [(-1, -1), (-1, 1), (1, 0)],
-        "Horse":    [(-1, 0), (0, -1), (1, 0)],
-        "Ox":       [(-1, 0), (0, 1), (1, 0)],
-        "Crane":    [(-1, 0), (1, -1), (1, 1)],
-        "Boar":     [(-1, 0), (0, -1), (0, 1)],
-        "Eel":      [(-1, -1), (0, 1), (1, -1)],
-        "Cobra":    [(-1, 1), (0, -1), (1, 1)],
-    }
-
     CARD_NAMES: ClassVar[tuple] = tuple(CARD_MOVES.keys())
     CARD_ID: ClassVar[dict] = {name: i for i, name in enumerate(CARD_NAMES, start=1)}
     PIECE_ID: ClassVar[dict] = {"empty": 0, "master": 1, "student": 2}
@@ -90,11 +70,15 @@ class GameState:
     def board_int(self):
         return int.from_bytes(bytes((((self.board[i+1] if i < 25 - 1 else 0)<<4) | self.board[i]) for i in range(0, 25, 2)), "little") # ※あるいは単純なシフト合算
 
-    def card_int(self):
-        return int.from_bytes(bytes((((self.cards[i+1]-1 if i < 5 - 1 else self.turn)<<4) | self.cards[i]-1) for i in range(0, 5, 2)), "little") # ※あるいは単純なシフト合算
+    def cards_int(self):
+        return int.from_bytes(bytes( 
+            ( (self.cards[0] & 0x0f) | ((self.cards[1]&0x0f)<<4), 
+              self.cards[2], 
+              (self.cards[3] & 0x0f) | ((self.cards[4]&0x0f)<<4) )
+            ), "little") # ※あるいは単純なシフト合算
 
     def __int__(self):
-        return (self.card_int() << 100) | self.board_int()
+        return (self.turn << 120) | (self.cards_int() << 100) | self.board_int()
     
     @classmethod
     def from_int(cls, val: int) -> "GameState":
@@ -122,6 +106,7 @@ class GameState:
                 target_player, _ = self.piece_at(nr, nc)
                 if target_player != player:  # 自駒の上には移動不可
                     dests.append((nr, nc))
+        print(hex(int(self)))
         return dests
 
     def apply_move(self, r, c, nr, nc, card_slot):
