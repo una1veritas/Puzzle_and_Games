@@ -68,8 +68,8 @@ matches = con.execute(f"""
 """)
 
 for a_match in matches.fetchall():
-    print(a_match)
     b_time, mode, map_name, result, duration, teams = a_match
+    print(mode, map=name,)
     # print(f"対戦日時  : {b_time}")
     # print(f"モード    : {mode}")
     # print(f"マップ    : {map_name}")
