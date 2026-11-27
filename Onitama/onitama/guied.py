@@ -6,6 +6,7 @@ import tkinter as tk
 
 @dataclass
 class GameState:
+    PLAYER_NONE: ClassVar[int] = 0
     PLAYER_BLUE: ClassVar[int] = 1
     PLAYER_RED:  ClassVar[int] = 2
     
@@ -39,13 +40,11 @@ class GameState:
     
     PIECE_ID: ClassVar[dict] = {"empty": 0, "master": 1, "student": 2}
     PIECE_NAMES = (
-        "", "onmyoji", "shikigami",
+        " ", 
+        #"onmyoji", "shikigami",
         "master", "student",
-        "seirei", "sylph",
+        #"seirei", "sylph",
     )
-    PIECE_ID = {"onmyoji":1, "shikigami": 2, "master":1, "student": 2, 
-                "seirei":3, "sylph":3, # reserved
-                "": 0}
     
     board: bytearray = field(default_factory=lambda: bytearray(25))
     # cards[0:2]: BLUEの手札, cards[2]: 交換用, cards[3:5]: REDの手札
@@ -54,6 +53,7 @@ class GameState:
 
     @staticmethod
     def piece(cellval):
+        # player id, piece type
         return ((cellval >> 2) & 3, cellval & 3)
     
     @staticmethod
@@ -71,6 +71,7 @@ class GameState:
     def __post_init__(self):
         if any(self.board):
             return
+        # self.cards (blue[2], deck, red[2]
         chosen = random.sample(self.CARD_NAMES, 5)
         for i, name in enumerate(chosen):
             self.cards[i] = self.CARD_ID[name]
@@ -79,9 +80,9 @@ class GameState:
 
         # BLUEは下(row 4)、REDは上(row 0)に固定
         for col in range(5):
-            ptype = self.PIECE_ID["master"] if col == 2 else self.PIECE_ID["student"]
-            self.board[4 * 5 + col] = (self.PLAYER_BLUE << 2) | ptype
-            self.board[0 * 5 + col] = (self.PLAYER_RED << 2) | ptype
+            pctype = self.PIECE_ID["master"] if col == 2 else self.PIECE_ID["student"]
+            self.board[4 * 5 + col] = (self.PLAYER_BLUE << 2) | pctype
+            self.board[0 * 5 + col] = (self.PLAYER_RED << 2) | pctype
 
     # bytearray(25) -> 100bit int（リトルエンディアン的なパック）
     # 各バイトの上位4bitは0なので、16進文字列経由で一発変換できる
@@ -117,6 +118,7 @@ class GameState:
 
     def piece_at(self, row, col):
         cellval = self.board[row * 5 + col]
+        # player id, piece type
         return ((cellval >> 2) & 3, cellval & 3)
     
     def legal_destinations(self, r, c, card_id):
@@ -148,29 +150,24 @@ class GameState:
 
     def __str__(self):
         resstr = ""
-        resstr += self.CARD_NAMES[self.cards[0]] + ", " + self.CARD_NAMES[self.cards[1]]
-        resstr += "\n+-+-+-+-+-+\n"
+        resstr += self.CARD_NAMES[self.cards[3]] + ", " + self.CARD_NAMES[self.cards[4]]
+        resstr += "\nRed\n+-+-+-+-+-+\n"
         for r, c in product(range(5), range(5)) :
-            p = self.piece(self.board_square(r,c))
+            player_id, pc_type = self.piece_at(r,c)
             resstr += '|'
-            if p[0] == 0:
+            if player_id == self.PLAYER_NONE:
                 resstr += ' '
-            elif p[0] == self.PLAYER_BLUE :
-                if p[1] == 1 :
-                    resstr += 'B'
-                elif p[1] == 2 :
-                    resstr += 'b'
-            elif p[0] == self.PLAYER_RED :
-                if p[1] == 1 :
-                    resstr += 'R'
-                elif p[1] == 2 :
-                    resstr += 'r'
+            elif player_id == self.PLAYER_RED :
+                resstr += 'R' if self.PIECE_NAMES[pc_type] == 'master' else 'r'
+            elif player_id == self.PLAYER_BLUE :
+                resstr += 'B' if self.PIECE_NAMES[pc_type] == 'master' else 'b'
             if (c % 5) == 4 :
                 resstr += '|'
                 if r == 2 :
                     resstr += ' ' + self.CARD_NAMES[self.cards[2]]
                 resstr += '\n+-+-+-+-+-+\n'
-        resstr += self.CARD_NAMES[self.cards[3]] + ", " + self.CARD_NAMES[self.cards[4]]
+        resstr += 'Blue\n'
+        resstr += self.CARD_NAMES[self.cards[0]] + ", " + self.CARD_NAMES[self.cards[1]]
         return resstr
 
 class OnitamaGUI:
