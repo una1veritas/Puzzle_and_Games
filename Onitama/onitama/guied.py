@@ -1,46 +1,52 @@
-import tkinter as tk
 from dataclasses import dataclass, field
 from typing import ClassVar
 import random
+from itertools import product
+import tkinter as tk
 
 @dataclass
 class GameState:
     PLAYER_BLUE: ClassVar[int] = 1
     PLAYER_RED:  ClassVar[int] = 2
-
-    CARD_STAMP: ClassVar[dict] = {
-        "Tiger": "blue", "Dragon": "red", "Frog": "red", "Rabbit": "blue",
-        "Crab": "blue", "Elephant": "red", "Goose": "blue", "Rooster": "red",
-        "Monkey": "blue", "Mantis": "red", "Horse": "red", "Ox": "blue",
-        "Crane": "blue", "Boar": "red", "Eel": "blue", "Cobra": "red",
-    }
     
-    CARD_MOVES: ClassVar[dict] = {
+    CARD_SUIT: ClassVar[tuple[tuple[str, list]]] = (
         # --- BLUE (0..7) ---
-        "Tiger":  [(-2, 0), (1, 0)],
-        "Crab":   [(-1, 0), (0, -2), (0, 2)],
-        "Monkey": [(-1, -1), (-1, 1), (1, -1), (1, 1)],
-        "Crane":  [(-1, 0), (1, -1), (1, 1)],
-        "Rabbit": [(0, 2), (-1, 1), (1, -1)],    # Frogの鏡像
-        "Goose":  [(-1, -1), (0, -1), (0, 1), (1, 1)], # Roosterの鏡像
-        "Ox":     [(-1, 0), (0, 1), (1, 0)],     # Horseの鏡像
-        "Eel":    [(-1, -1), (0, 1), (1, -1)],   # Cobraの鏡像
+        ("Tiger",  [(-2, 0), (1, 0)]),
+        ("Crab",   [(-1, 0), (0, -2), (0, 2)]),
+        ("Monkey", [(-1, -1), (-1, 1), (1, -1), (1, 1)]),
+        ("Crane",  [(-1, 0), (1, -1), (1, 1)]),
+        ("Rabbit", [(0, 2), (-1, 1), (1, -1)]),    # Frogの鏡像
+        ("Goose",  [(-1, -1), (0, -1), (0, 1), (1, 1)]), # Roosterの鏡像
+        ("Ox",     [(-1, 0), (0, 1), (1, 0)]),     # Horseの鏡像
+        ("Eel",    [(-1, -1), (0, 1), (1, -1)]),   # Cobraの鏡像
     
         # --- RED (8..15) ---
-        "Dragon":   [(-1, -2), (-1, 2), (1, -1), (1, 1)],
-        "Elephant": [(-1, -1), (-1, 1), (0, -1), (0, 1)],
-        "Mantis":   [(-1, -1), (-1, 1), (1, 0)],
-        "Boar":     [(-1, 0), (0, -1), (0, 1)],
-        "Frog":     [(0, -2), (-1, -1), (1, 1)],   # Rabbitの鏡像
-        "Rooster":  [(-1, 1), (0, -1), (0, 1), (1, -1)], # Gooseの鏡像
-        "Horse":    [(-1, 0), (0, -1), (1, 0)],    # Oxの鏡像
-        "Cobra":    [(-1, 1), (0, -1), (1, 1)],    # Eelの鏡像
-    }
-
-    CARD_NAMES: ClassVar[tuple] = tuple(CARD_MOVES.keys())
-    CARD_ID: ClassVar[dict] = {name: i for i, name in enumerate(CARD_NAMES, start=1)}
+        ("Dragon",   [(-1, -2), (-1, 2), (1, -1), (1, 1)]),
+        ("Elephant", [(-1, -1), (-1, 1), (0, -1), (0, 1)]),
+        ("Mantis",   [(-1, -1), (-1, 1), (1, 0)]),
+        ("Boar",     [(-1, 0), (0, -1), (0, 1)]),
+        ("Frog",     [(0, -2), (-1, -1), (1, 1)]),   # Rabbitの鏡像
+        ("Rooster",  [(-1, 1), (0, -1), (0, 1), (1, -1)]), # Gooseの鏡像
+        ("Horse",    [(-1, 0), (0, -1), (1, 0)]),    # Oxの鏡像
+        ("Cobra",    [(-1, 1), (0, -1), (1, 1)]),    # Eelの鏡像
+    )
+    
+    # maps card ID (starts with 1) to card name
+    CARD_NAMES: ClassVar[tuple[str]] = tuple(card[0] for card in CARD_SUIT)
+    # maps card name to card ID
+    CARD_ID: ClassVar[dict] = {name: i for i, name in enumerate(CARD_NAMES[:len(set(CARD_NAMES))])}
+    CARD_MOVES: ClassVar[dict] = {card[0]: card[1] for card in CARD_SUIT }
+    
     PIECE_ID: ClassVar[dict] = {"empty": 0, "master": 1, "student": 2}
-
+    PIECE_NAMES = (
+        "", "onmyoji", "shikigami",
+        "master", "student",
+        "seirei", "sylph",
+    )
+    PIECE_ID = {"onmyoji":1, "shikigami": 2, "master":1, "student": 2, 
+                "seirei":3, "sylph":3, # reserved
+                "": 0}
+    
     board: bytearray = field(default_factory=lambda: bytearray(25))
     # cards[0:2]: BLUEの手札, cards[2]: 交換用, cards[3:5]: REDの手札
     cards: bytearray = field(default_factory=lambda: bytearray(5))
@@ -49,6 +55,18 @@ class GameState:
     @staticmethod
     def piece(cellval):
         return ((cellval >> 2) & 3, cellval & 3)
+    
+    @staticmethod
+    def card_stamp(card_id):
+        if 15 < card_id :
+            raise ValueError(f"card ID out of range: {card_id}")
+        return ("blue", "red")[card_id>>3]
+    
+    @staticmethod
+    def card_stamp_byname(card_name):
+        if card_name not in GameState.CARD_NAMES :
+            raise ValueError(f"unknown card name: {card_name}")
+        return GameState.card_stamp(GameState.CARD_ID[card_name])
 
     def __post_init__(self):
         if any(self.board):
@@ -57,7 +75,7 @@ class GameState:
         for i, name in enumerate(chosen):
             self.cards[i] = self.CARD_ID[name]
         # 5枚目(交換用)のスタンプ色で先手決定
-        self.turn = self.PLAYER_BLUE if self.CARD_STAMP[chosen[2]] == "blue" else self.PLAYER_RED
+        self.turn = self.PLAYER_BLUE if self.card_stamp(self.cards[2]) == "blue" else self.PLAYER_RED
 
         # BLUEは下(row 4)、REDは上(row 0)に固定
         for col in range(5):
@@ -72,20 +90,29 @@ class GameState:
 
     def cards_int(self):
         return int.from_bytes(bytes( 
-            ( (self.cards[0] & 0x0f) | ((self.cards[1]&0x0f)<<4), 
-              self.cards[2], 
-              (self.cards[3] & 0x0f) | ((self.cards[4]&0x0f)<<4) )
+            ( (self.cards[1]<<4) | (self.cards[0] & 0x0f), 
+              (self.cards[2] & 0x0f),
+              (self.cards[4] <<4) | (self.cards[3] & 0x0f) )
             ), "little") # ※あるいは単純なシフト合算
 
-    def __int__(self):
+    def to_int(self):
         return (self.turn << 120) | (self.cards_int() << 100) | self.board_int()
+    
+    def set_int(self, bitval):
+        for i in range(25):
+            self.board[i] = bitval & 0x0f
+            bitval >>= 4
+        for i in (0, 1, 2, 3, 4):
+            self.cards[i] = bitval & 0x0f
+            bitval >>=4
+            if i == 2 :
+                bitval >>= 4
+        self.turn = bitval & 0x03
     
     @classmethod
     def from_int(cls, val: int) -> "GameState":
         obj = cls.__new__(cls)
-        obj.board = bytearray((val >> (i * 4)) & 0xF for i in range(25))
-        obj.cards = bytearray(((val >> (100 + i * 4)) & 0xF) + 1 for i in range(5))
-        obj.turn = (val >> 120) & 0x3  # PLAYER_BLUE(1) または PLAYER_RED(2) がそのまま戻る
+        obj.set_int(val)
         return obj
 
     def piece_at(self, row, col):
@@ -97,7 +124,7 @@ class GameState:
         player, _ = self.piece_at(r, c)
         if player != self.turn:
             return []
-        card_name = self.CARD_NAMES[card_id - 1]
+        card_name = self.CARD_NAMES[card_id]
         sign = 1 if player == self.PLAYER_BLUE else -1
         dests = []
         for dr, dc in self.CARD_MOVES[card_name]:
@@ -106,7 +133,7 @@ class GameState:
                 target_player, _ = self.piece_at(nr, nc)
                 if target_player != player:  # 自駒の上には移動不可
                     dests.append((nr, nc))
-        print(hex(int(self)))
+        print(hex(self.to_int()))
         return dests
 
     def apply_move(self, r, c, nr, nc, card_slot):
@@ -116,6 +143,35 @@ class GameState:
         self.cards[card_slot], self.cards[2] = self.cards[2], self.cards[card_slot]
         self.turn = self.PLAYER_RED if self.turn == self.PLAYER_BLUE else self.PLAYER_BLUE
 
+    def board_square(self, row, col):
+        return self.board[row*5 + col]
+
+    def __str__(self):
+        resstr = ""
+        resstr += self.CARD_NAMES[self.cards[0]] + ", " + self.CARD_NAMES[self.cards[1]]
+        resstr += "\n+-+-+-+-+-+\n"
+        for r, c in product(range(5), range(5)) :
+            p = self.piece(self.board_square(r,c))
+            resstr += '|'
+            if p[0] == 0:
+                resstr += ' '
+            elif p[0] == self.PLAYER_BLUE :
+                if p[1] == 1 :
+                    resstr += 'B'
+                elif p[1] == 2 :
+                    resstr += 'b'
+            elif p[0] == self.PLAYER_RED :
+                if p[1] == 1 :
+                    resstr += 'R'
+                elif p[1] == 2 :
+                    resstr += 'r'
+            if (c % 5) == 4 :
+                resstr += '|'
+                if r == 2 :
+                    resstr += ' ' + self.CARD_NAMES[self.cards[2]]
+                resstr += '\n+-+-+-+-+-+\n'
+        resstr += self.CARD_NAMES[self.cards[3]] + ", " + self.CARD_NAMES[self.cards[4]]
+        return resstr
 
 class OnitamaGUI:
     def __init__(self, root):
@@ -149,37 +205,9 @@ class OnitamaGUI:
 
         self.draw_all()
 
-    # def draw_card(self, parent, card_id, slot=None, rotate=False):
-    #     name = self.state.CARD_NAMES[card_id - 1]
-    #     is_selected = (slot is not None and slot == self.selected_slot)
-    #     bg = "#fff2cc" if is_selected else "#f0f0f0"
-    #     relief = tk.SUNKEN if is_selected else tk.RAISED
-    #
-    #     frame = tk.Frame(parent, bd=2, relief=relief, bg=bg, padx=4, pady=4)
-    #     lbl = tk.Label(frame, text=name, bg=bg, font=("Helvetica", 10, "bold"))
-    #     lbl.pack()
-    #
-    #     cv = tk.Canvas(frame, width=75, height=75, bg="white", highlightthickness=0)
-    #     cv.pack()
-    #     sign = -1 if rotate else 1
-    #     moves = {(2 + sign * dr, 2 + sign * dc) for dr, dc in self.state.CARD_MOVES[name]}
-    #
-    #     for r in range(5):
-    #         for c in range(5):
-    #             color = "white"
-    #             if (r, c) == (2, 2):
-    #                 color = "#444444"
-    #             elif (r, c) in moves:
-    #                 color = "#4a90e2" if self.state.CARD_STAMP[name] == "blue" else "#e24a4a" #color = "#4a90e2" if not rotate else "#e24a4a"
-    #             cv.create_rectangle(c*15, r*15, (c+1)*15, (r+1)*15, fill=color, outline="#cccccc")
-    #
-    #     if slot is not None:
-    #         for w in (frame, lbl, cv):
-    #             w.bind("<Button-1>", lambda e, s=slot: self.on_card_click(s))
-    #     return frame
 
     def draw_card(self, parent, card_id, slot=None, rotate=False):
-        name = self.state.CARD_NAMES[card_id - 1]
+        name = self.state.CARD_NAMES[card_id]
         is_selected = (slot is not None and slot == self.selected_slot)
         bg = "#fff2cc" if is_selected else "#f0f0f0"
         relief = tk.SUNKEN if is_selected else tk.RAISED
@@ -201,7 +229,7 @@ class OnitamaGUI:
 
         sign = -1 if rotate else 1
         moves = {(2 + sign * dr, 2 + sign * dc) for dr, dc in self.state.CARD_MOVES[name]}
-        stamp_color = "#4a90e2" if self.state.CARD_STAMP[name] == "blue" else "#e24a4a"
+        stamp_color = "#4a90e2" if self.state.card_stamp_byname(name) == "blue" else "#e24a4a"
 
         for r in range(5):
             for c in range(5):
@@ -297,4 +325,10 @@ class OnitamaGUI:
 if __name__ == "__main__":
     root = tk.Tk()
     app = OnitamaGUI(root)
+    print(app.state)
     root.mainloop()
+    gsta = app.state
+    val = gsta.to_int()
+    print(gsta, hex(val))
+    gsta.set_int(val)
+    print(gsta, hex(gsta.to_int()))

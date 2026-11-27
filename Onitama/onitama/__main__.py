@@ -103,7 +103,7 @@ class GameState:
     def rowcol(self, r, c):
         return r * 5 + c
 
-    def square(self, row, col):
+    def board_square(self, row, col):
         return self.board[row*5 + col]
     
     def card_str(self, card):
@@ -127,7 +127,7 @@ class GameState:
             resstr += nm + "\n" + mvs
         resstr += "\n+-+-+-+-+-+\n"
         for r, c in product(range(5), range(5)) :
-            p = self.piece(self.square(r,c))
+            p = self.piece(self.board_square(r,c))
             resstr += '|'
             if p[0] == 0:
                 resstr += ' '
